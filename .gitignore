@@ -1,0 +1,4 @@
+*.o 
+kilo 
+-pedantic
+*.exe
