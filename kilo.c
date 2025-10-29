@@ -78,6 +78,7 @@ struct editorConfig {
   int coloff;
   int screenrows;
   int screencols;
+  int margins;
   int numrows;
   erow* row;
   int dirty;
@@ -91,6 +92,7 @@ struct editorConfig {
 struct editorConfig E;
 
 /*** filetypes ***/
+
 char *C_HL_extensions[] = { ".c", ".h", ".cpp", NULL };
 char *C_HL_keywords[] = {
   "switch", "if", "while", "for", "break", "continue", "return", "else",
@@ -107,7 +109,6 @@ struct editorSyntax HLDB[] = {
     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
   },
 };
-
 #define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
 
 /*** prototypes ***/
@@ -317,7 +318,33 @@ int editorSyntaxToColor(int hl) {
     default: return 37;
   }
 }
-
+//Function to reset and setup the strings of the onfig file
+/*void parser_of_string(FILE* keywords_index, int keywords) {
+   char element;
+   char **C_HL_keywords = (char**)malloc(sizeof(char*) * keywords);
+  // char **C_HL_comments;
+   int i = 0;
+   while((element = fgetc(keywords_index)) != EOF) {
+        if(element == '"') {
+        C_HL_keywords[i] = (char*)malloc(sizeof(char)*15);
+        char* temp = C_HL_keywords[i];
+            while((element = fgetc(keywords_index)) != EOF && keywords > 0) {
+               if(element == '"')
+                    break;
+               *temp = element;
+               temp++;
+            }
+            *temp = '\0';
+        }
+        i ++;
+        if(keywords > 0)
+            keywords --;
+        else 
+          break;
+   }
+   HLDB.keywords = C_HL_keywords;
+}
+*/
 void editorSelectSyntaxHighlight() {
   E.syntax = NULL;
   if (E.filename == NULL) return;
@@ -463,8 +490,9 @@ void editorInsertNewline() {
     row->size = E.cx;
     row->chars[row->size] = '\0';
     editorUpdateRow(row);
+    E.cy++;
   }
-  E.cy++;
+
   E.cx = 0;
 }
 
@@ -670,14 +698,16 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, "~", 1);
       }
     } else {
-     char str[20];
-     int max_len = sprintf(str, "%d", E.numrows + 1);
-     int len_file = sprintf(str,"%d",filerow + 1);
-     int remaining = max_len - len_file;
-     for(int i = 0; i < remaining; i++) 
+      // INIZIO LOGICA NUMERAZIONE RIGA
+      char str[20];
+      int max_len = sprintf(str, "%d", E.numrows + 1);
+      int len_file = sprintf(str,"%d",filerow + 1);
+      int remaining = max_len - len_file;
+      for(int i = 0; i < remaining; i++)
                 strcat(str," ");
       strcat(str,"| ");
       abAppend(ab,str,max_len + 3);
+      E.margins = max_len + 2; 
       int len = E.row[filerow].rsize - E.coloff;
       if (len < 0) len = 0;
       if (len > E.screencols) len = E.screencols;
@@ -719,6 +749,7 @@ void editorDrawRows(struct abuf *ab) {
     abAppend(ab, "\r\n", 2);
   }
 }
+
 void editorDrawStatusBar(struct abuf *ab) {
   abAppend(ab, "\x1b[7m", 4);
   char status[80], rstatus[80];
@@ -741,7 +772,6 @@ void editorDrawStatusBar(struct abuf *ab) {
   abAppend(ab, "\x1b[m", 3);
   abAppend(ab, "\r\n",2);
 }
-
 void editorDrawMessageBar(struct abuf *ab) {
   abAppend(ab, "\x1b[K", 3);
   int msglen = strlen(E.statusmsg);
@@ -754,15 +784,15 @@ void editorRefreshScreen() {
   editorScroll();
 
   struct abuf ab = ABUF_INIT;
-  abAppend(&ab, "\x1b[?25l", 6);/* */
+  abAppend(&ab, "\x1b[?25l", 6);
   abAppend(&ab, "\x1b[H", 3);
   editorDrawRows(&ab);
   editorDrawStatusBar(&ab);
   editorDrawMessageBar(&ab);
 
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,
-                                            (E.rx - E.coloff) + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, 
+           (E.rx - E.coloff) + 1 + E.margins); // <--- MODIFICA: AGGIUNTA E.margins
   abAppend(&ab, buf, strlen(buf));
   abAppend(&ab, "\x1b[?25h", 6);
   write(STDOUT_FILENO, ab.b, ab.len);
@@ -817,17 +847,17 @@ void editorMoveCursor(int key) {
   erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
   switch (key) {
     case ARROW_LEFT:
-      if (E.cx != 0) {
+      if (E.cx > 0) { 
         E.cx--;
-      } else if (E.cy > 0) {
+      } else if (E.cy != 0) {
         E.cy--;
         E.cx = E.row[E.cy].size;
       }
       break;
     case ARROW_RIGHT:
-      if (row && E.cx < row->size) {
+      if (row && E.cx < row->size ) {
         E.cx++;
-      } else if (row && E.cx == row->size) {
+      } else if (E.cy < E.numrows - 1) {
         E.cy++;
         E.cx = 0;
       }
@@ -939,6 +969,7 @@ void initEditor() {
   E.rx = 0;
   E.rowoff = 0;
   E.coloff = 0;
+  E.margins = 0;
   E.numrows = 0;
   E.row = NULL;
   E.dirty = 0;
@@ -959,7 +990,7 @@ int main(int argc, char * argv[]) {
     }
 
     editorSetStatusMessage(
-        "HELP: Ctrl-S = save | HELP: Ctrl-Q = quit | HELP: Ctrl-F = find");
+        "HELP: Ctrl-S = save | HELP: Ctrl-Q = quit | HELP: Ctrl-P = find");
 
     while (1){
         editorRefreshScreen();
