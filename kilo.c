@@ -16,6 +16,12 @@
 #include <stdarg.h>
 #include <time.h>
 
+/*
+ * KiloSkroll: An extended fork of the Kilo Text Editor
+ * Originally Copyright (c) 2017 Salvatore Sanfilippo (Antirez)
+ * This fork (c) [Anno] Skollwarynz. All modifications licensed under MIT.
+ */
+
 /*** defines ***/
 #define KILO_VERSION "0.0.1"
 #define KILO_TAB_STOP 8
@@ -90,21 +96,66 @@ struct editorConfig {
 };
 
 struct editorConfig E;
+    
+// method one 
+char** parser_of_string(char * prova ) {
+   size_t l = strlen("Config/") + strlen("c_keywords.config") + strlen(prova) + 1; 
+   char* path = (char*)malloc(sizeof(char) * l);
+   snprintf(path, l, "Config/%s_keywords.config", prova);
+   FILE* keywords_index = fopen(path, "r");
+   char element;
+   int keywords = 0;
+   while((element = fgetc(keywords_index)) != EOF) {
+        if(element == 'E')
+            break;
+        if(element == '"') {
+             while((element = fgetc(keywords_index)) != EOF) {
+               if(element == '"')
+                    break;
+            }
+        }
+        keywords++;
+   }
+   rewind(keywords_index);
+   char** si = (char**)malloc(sizeof(char*) * keywords);
+  // char **C_HL_commen ts;
+   int i = 0;
+   while((element = fgetc(keywords_index)) != EOF) {
+        if(element == 'E')
+            break;
+        if(element == '"') {
+        si[i] = (char*)malloc(sizeof(char)*15);
+        char* temp = si[i];
+            while((element = fgetc(keywords_index)) != EOF) {
+               if(element == '"')
+                    break;
+               *temp = element;
+               temp++;
+            }
+            *temp = '\0';
+            if(strlen(si[i]) < 14 )
+                si[i] = realloc(si[i], strlen(si[i]) + 1);
+            i++;
+        }
+        if(keywords > 0)
+            keywords --;
+   } 
+   
+   si[i] = NULL;
+   return si;
+}
+
 
 /*** filetypes ***/
 
-char *C_HL_extensions[] = { ".c", ".h", ".cpp", NULL };
-char *C_HL_keywords[] = {
-  "switch", "if", "while", "for", "break", "continue", "return", "else",
-  "struct", "union", "typedef", "static", "enum", "class", "case",
-  "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
-  "void|", NULL
-};
+char *C_HL_extensions[] = {NULL };
+char **C_HL_keywords; 
+
 struct editorSyntax HLDB[] = {
   {
-    "c",
+    ".c",
     C_HL_extensions,
-    C_HL_keywords,
+    NULL,
     "//", "/*", "*/",
     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
   },
@@ -209,7 +260,7 @@ int is_separator(int c) {
 void editorUpdateSyntax(erow *row) {
   row->hl = realloc(row->hl, row->rsize);
   memset(row->hl, HL_NORMAL, row->rsize);
-  if (E.syntax == NULL) return;
+  if (E.syntax == NULL) return;  
   char **keywords = E.syntax->keywords;
   char *scs = E.syntax->singleline_comment_start;
   char *mcs = E.syntax->multiline_comment_start;
@@ -318,35 +369,27 @@ int editorSyntaxToColor(int hl) {
     default: return 37;
   }
 }
-//Function to reset and setup the strings of the onfig file
-/*void parser_of_string(FILE* keywords_index, int keywords) {
-   char element;
-   char **C_HL_keywords = (char**)malloc(sizeof(char*) * keywords);
-  // char **C_HL_comments;
-   int i = 0;
-   while((element = fgetc(keywords_index)) != EOF) {
-        if(element == '"') {
-        C_HL_keywords[i] = (char*)malloc(sizeof(char)*15);
-        char* temp = C_HL_keywords[i];
-            while((element = fgetc(keywords_index)) != EOF && keywords > 0) {
-               if(element == '"')
-                    break;
-               *temp = element;
-               temp++;
-            }
-            *temp = '\0';
-        }
-        i ++;
-        if(keywords > 0)
-            keywords --;
-        else 
-          break;
-   }
-   HLDB.keywords = C_HL_keywords;
+
+void debug_print_keywords(char **keywords) {
+    if (keywords == NULL) {
+        printf("DEBUG: Array di parole chiave NULL o errore di allocazione.\n");
+        return;
+    }
+
+    printf("DEBUG: Caricamento parole chiave (count max 50):\n");
+    int i = 0;
+    while (keywords[i] != NULL && i < 50) { // Limita a 50 per sicurezza
+        printf("[%d]: \"%s\"\n", i, keywords[i]);
+        i++;
+    }
+    printf("DEBUG: Trovate %d parole chiave (l'ultimo elemento è NULL).\n", i);
 }
-*/
+
 void editorSelectSyntaxHighlight() {
-  E.syntax = NULL;
+  char * prova =  strchr(E.filename,'.');
+  prova++;
+  HLDB[0].keywords = parser_of_string(prova);
+    E.syntax = &HLDB[0];
   if (E.filename == NULL) return;
   char *ext = strrchr(E.filename, '.');
   for (unsigned int j = 0; j < HLDB_ENTRIES; j++) {
@@ -982,7 +1025,7 @@ void initEditor() {
   E.screenrows -= 2;
 }
 
-int main(int argc, char * argv[]) {
+int main(int argc, char* argv[]) {
     eneableRawMode();
     initEditor();
      if (argc >= 2) {
