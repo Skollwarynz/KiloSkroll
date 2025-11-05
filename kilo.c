@@ -23,7 +23,7 @@
  */
 
 /*** defines ***/
-#define KILO_VERSION "0.0.1"
+#define KILO_VERSION "0.0.2"
 #define KILO_TAB_STOP 8
 #define KILO_QUIT_TIMES 3
 
@@ -98,11 +98,16 @@ struct editorConfig {
 struct editorConfig E;
     
 // method one 
+// TODO control to secure errors with allocation 
+// add if to resolve the absence of a config file
 char** parser_of_string(char * prova ) {
    size_t l = strlen("Config/") + strlen("c_keywords.config") + strlen(prova) + 1; 
    char* path = (char*)malloc(sizeof(char) * l);
    snprintf(path, l, "Config/%s_keywords.config", prova);
    FILE* keywords_index = fopen(path, "r");
+   if( keywords_index == NULL) {
+        return NULL;
+   }
    char element;
    int keywords = 0;
    while((element = fgetc(keywords_index)) != EOF) {
@@ -389,6 +394,9 @@ void editorSelectSyntaxHighlight() {
   char * prova =  strchr(E.filename,'.');
   prova++;
   HLDB[0].keywords = parser_of_string(prova);
+  if(HLDB[0].keywords == NULL){
+        return;
+  }
     E.syntax = &HLDB[0];
   if (E.filename == NULL) return;
   char *ext = strrchr(E.filename, '.');
